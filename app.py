@@ -19,7 +19,7 @@ st.markdown("""
         </style>
         """, unsafe_allow_html=True)
 
-host = 'http://127.0.0.1:8000'
+host = 'https://hotel-reviews-vp2e4dlnjq-uc.a.run.app'
 
 # Dividir la interfaz en dos columnas
 col1, col2 = st.columns(2)
