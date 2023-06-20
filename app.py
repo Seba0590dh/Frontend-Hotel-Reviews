@@ -29,8 +29,9 @@ with col1:
     # Mover el st.text_input a la esquina inferior izquierda
     txt = st.text_input('What hotel would you like?', key='input_col1')  # Cambiamos la clave 'input' por 'input_col1'
     st.write('Length:', len(txt))
+    country = st.text_input('What country would you like?')
 
-    x = requests.get(host+'/search', params={'search_query': txt})
+    x = requests.get(host+'/search', params={'search_query': txt,'country': country})
     data = json.loads(x.text)
 
     df = pd.DataFrame.from_records(data=data)
@@ -47,12 +48,12 @@ with col1:
 
         # Mostrar la tabla con los datos del dataframe
         st.write('Tabla de Hoteles')
-        st.table(df[['hotel_name', 'reviewer_score', 'hotel_address']])
+        st.table(df[['hotel_name', 'reviewer_score', 'hotel_address','summary']])
 
 
 # Contenido de la segunda columna
 with col2:
-    x = requests.get(host+'/search', params={'search_query': txt})
+    x = requests.get(host+'/search', params={'search_query': txt,'country':country})
     data = json.loads(x.text)
 
     df = pd.DataFrame.from_records(data=data)
@@ -62,8 +63,8 @@ with col2:
         df_cleaned = df.dropna(subset=['lat', 'lng'])
 
         # Obtener las primeras 20 coordenadas únicas y los nombres de los hoteles
-        coordenadas_unicas = df_cleaned[['lat', 'lng']].drop_duplicates().head(20).values.tolist()
-        nombres_hoteles = df_cleaned['hotel_name'].drop_duplicates().head(20).values.tolist()
+        coordenadas_unicas = df_cleaned[['lat', 'lng']].values.tolist()
+        nombres_hoteles = df_cleaned['hotel_name'].values.tolist()
 
         # Crear un mapa centrado en el punto medio de las coordenadas
         latitudes = [coord[0] for coord in coordenadas_unicas]
