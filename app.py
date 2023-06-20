@@ -31,26 +31,25 @@ with col1:
     st.write('Length:', len(txt))
     country = st.text_input('What country would you like?')
 
-    if st.button('Search'):  # Agregamos un botón 'Search'
-        if txt and country:  # Verificar que ambos campos tengan valores antes de hacer la solicitud
-            x = requests.get(host+'/search', params={'search_query': txt, 'country': country})
-            data = json.loads(x.text)
+    x = requests.get(host+'/search', params={'search_query': txt,'country': country})
+    data = json.loads(x.text)
 
-            df = pd.DataFrame.from_records(data=data)
+    df = pd.DataFrame.from_records(data=data)
 
-            if df.shape[0]:
-                # Eliminar filas con valores NaN
-                df_cleaned = df.dropna(subset=['lat', 'lng'])
+    if df.shape[0]:
+        # Eliminar filas con valores NaN
+        df_cleaned = df.dropna(subset=['lat', 'lng'])
 
-                # Mostrar la tabla con la información del hotel
-                selected_hotel = df_cleaned[df_cleaned['hotel_name'] == txt].head(1)
-                if not selected_hotel.empty:
-                    st.write('Tabla de Hoteles')
-                    st.table(selected_hotel[['hotel_name', 'reviewer_score', 'hotel_address']])
+        # Mostrar la tabla con la información del hotel
+        selected_hotel = df_cleaned[df_cleaned['hotel_name'] == txt].head(1)
+        if not selected_hotel.empty:
+            st.write('Tabla de Hoteles')
+            st.table(selected_hotel[['hotel_name', 'reviewer_score', 'hotel_address']])
 
-                # Mostrar la tabla con los datos del dataframe
-                st.write('Tabla de Hoteles')
-                st.table(df[['hotel_name', 'reviewer_score', 'hotel_address','summary']])
+        # Mostrar la tabla con los datos del dataframe
+        st.write('Tabla de Hoteles')
+        st.table(df[['hotel_name', 'reviewer_score', 'hotel_address','summary']])
+
 
 # Contenido de la segunda columna
 with col2:
