@@ -1,52 +1,110 @@
-import pandas as pd
 import folium
 from streamlit_folium import folium_static
 from folium.plugins import MarkerCluster
 import streamlit as st
+import requests
+import json
+import pandas as pd
 
-# Cargar el dataset desde el archivo CSV
-df = pd.read_csv('data/dataset20.csv')
+st.set_page_config(layout='wide')
 
-# Eliminar filas con valores NaN
-df_cleaned = df.dropna(subset=['lat', 'lng'])
+st.markdown("""
+        <style>
+               * {
+                    padding-left: 0rem;
+                    padding-right: 0rem;
+                    margin-left: 0rem;
+                    margin-right: 0rem;
+                }
+        </style>
+        """, unsafe_allow_html=True)
 
-# Obtener las primeras 20 coordenadas unicas y los nombres de los hoteles
-coordenadas_unicas = df_cleaned[['lat', 'lng']].drop_duplicates().head(20).values.tolist()
-nombres_hoteles = df_cleaned['Hotel_Name'].drop_duplicates().head(20).values.tolist()
+host = 'https://hotel-reviews-vp2e4dlnjq-uc.a.run.app'
 
-# Crear un mapa centrado en el punto medio de las coordenadas
-latitudes = [coord[0] for coord in coordenadas_unicas]
-longitudes = [coord[1] for coord in coordenadas_unicas]
-center_lat = sum(latitudes) / len(latitudes)
-center_lng = sum(longitudes) / len(longitudes)
+# Dividir la interfaz en dos columnas
+col1, col2 = st.columns(2)
 
-# Crear un mapa con centro automatico y ajuste de limites
-map = folium.Map(location=[center_lat, center_lng], width='50%', height='50%')
+# Contenido de la primera columna
+with col1:
+    # Mover el st.text_input a la esquina inferior izquierda
+    txt = st.text_input('What hotel would you like?', key='input_col1')  # Cambiamos la clave 'input' por 'input_col1'
+    st.write('Length:', len(txt))
+    country = st.text_input('What country would you like?')
 
-# Crear un grupo de marcadores
-marker_cluster = MarkerCluster()
+    try:
+        x = requests.get(host+'/search', params={'search_query': txt, 'country': country})
+        x.raise_for_status()  # Lanza una excepción si hay un error en la respuesta HTTP
+        data = json.loads(x.text)
+        df = pd.DataFrame.from_records(data=data)
 
-# Agregar marcadores para cada coordenada unica con el nombre del hotel en el cuadro emergente
-for coord, nombre_hotel in zip(coordenadas_unicas, nombres_hoteles):
-    lat, lng = coord
-    tooltip = folium.Tooltip(nombre_hotel)
-    marker = folium.Marker([lat, lng], tooltip=tooltip)
-    marker_cluster.add_child(marker)
+        if df.shape[0]:
+            # Mostrar la tabla con la información del hotel
+            selected_hotel = df[df['hotel_name'] == txt].head(1)
+            if not selected_hotel.empty:
+                selected_hotel['reviewer_score'] = selected_hotel['reviewer_score'].apply(lambda x: '{:.1f}'.format(x))
+                st.write('Tabla de Hoteles')
+                st.table(selected_hotel[['hotel_name', 'reviewer_score', 'hotel_address']])
 
-# Agregar el grupo de marcadores al mapa
-map.add_child(marker_cluster)
+            # Mostrar la tabla con los datos del dataframe
+            df['reviewer_score'] = df['reviewer_score'].apply(lambda x: '{:.1f}'.format(x))
+            st.write('Tabla de Hoteles')
+            st.table(df[['hotel_name', 'reviewer_score', 'hotel_address', 'summary']])
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error al hacer la solicitud: {e}")
+    except (json.JSONDecodeError, KeyError) as e:
+        st.error("Error al procesar los datos de respuesta de la API")
 
-# Ajustar los limites del mapa para que se muestren todos los marcadores con un margen adicional
-margin_factor = 0.1
-margin_lat = (max(latitudes) - min(latitudes)) * margin_factor
-margin_lng = (max(longitudes) - min(longitudes)) * margin_factor
-map.fit_bounds([[min(latitudes) - margin_lat, min(longitudes) - margin_lng], [max(latitudes) + margin_lat, max(longitudes) + margin_lng]])
+# Contenido de la segunda columna
+with col2:
+    try:
+        x = requests.get(host+'/search', params={'search_query': txt, 'country': country})
+        x.raise_for_status()  # Lanza una excepción si hay un error en la respuesta HTTP
+        data = json.loads(x.text)
+        df = pd.DataFrame.from_records(data=data)
 
-# Mostrar el mapa en Streamlit
-st.title('Mapa de Hoteles')
-st.write('Primeros 10 hoteles')
+        if df.shape[0]:
+            # Obtener las primeras 20 coordenadas únicas y los nombres de los hoteles
+            coordenadas_unicas = df[['lat', 'lng']].values.tolist()
+            nombres_hoteles = df['hotel_name'].values.tolist()
 
-folium_static(map)
+            # Crear un mapa centrado en el punto medio de las coordenadas
+            latitudes = [coord[0] for coord in coordenadas_unicas]
+            longitudes = [coord[1] for coord in coordenadas_unicas]
+            center_lat = sum(latitudes) / len(latitudes)
+            center_lng = sum(longitudes) / len(longitudes)
 
+            # Crear un mapa con centro automático y ajuste de límites
+            map = folium.Map(location=[center_lat, center_lng], width='90%', height='100%', fullscreen_control=True)
 
+            # Crear un grupo de marcadores
+            marker_cluster = MarkerCluster()
 
+            # Agregar marcadores para cada coordenada única con el nombre del hotel y la información adicional en el cuadro emergente
+            for coord, nombre_hotel in zip(coordenadas_unicas, nombres_hoteles):
+                lat, lng = coord
+                hotel_info = df.loc[df['hotel_name'] == nombre_hotel]
+                hotel_address = hotel_info['hotel_address'].values[0]
+                reviewer_score = hotel_info['reviewer_score'].values[0]
+                tooltip = folium.Tooltip(nombre_hotel)
+                popup_content = f"<b>{nombre_hotel}</b><br><b>Address:</b> {hotel_address}<br><b>Reviewer Score:</b> {reviewer_score}"
+                popup = folium.Popup(popup_content, max_width=300)
+                marker = folium.Marker([lat, lng], tooltip=tooltip, popup=popup)
+                marker_cluster.add_child(marker)
+
+            # Agregar el grupo de marcadores al mapa
+            map.add_child(marker_cluster)
+
+            # Ajustar los límites del mapa para que se muestren todos los marcadores con un margen adicional
+            margin_factor = 0.1
+            margin_lat = (max(latitudes) - min(latitudes)) * margin_factor
+            margin_lng = (max(longitudes) - min(longitudes)) * margin_factor
+            map.fit_bounds([[min(latitudes) - margin_lat, min(longitudes) - margin_lng], [max(latitudes) + margin_lat, max(longitudes) + margin_lng]])
+
+            # Mostrar el mapa en Streamlit
+            st.title('Mapa de Hoteles')
+            st.write('Primeros 20 hoteles')
+            folium_static(map)
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error al hacer la solicitud: {e}")
+    except (json.JSONDecodeError, KeyError) as e:
+        st.error("Error al procesar los datos de respuesta de la API")
