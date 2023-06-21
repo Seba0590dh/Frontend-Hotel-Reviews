@@ -37,11 +37,9 @@ with col1:
     df = pd.DataFrame.from_records(data=data)
 
     if df.shape[0]:
-        # Eliminar filas con valores NaN
-        df_cleaned = df.dropna(subset=['lat', 'lng'])
 
         # Mostrar la tabla con la información del hotel
-        selected_hotel = df_cleaned[df_cleaned['hotel_name'] == txt].head(1)
+        selected_hotel = df[df['hotel_name'] == txt].head(1)
         if not selected_hotel.empty:
             st.write('Tabla de Hoteles')
             st.table(selected_hotel[['hotel_name', 'reviewer_score', 'hotel_address']])
@@ -59,12 +57,10 @@ with col2:
     df = pd.DataFrame.from_records(data=data)
 
     if df.shape[0]:
-        # Eliminar filas con valores NaN
-        df_cleaned = df.dropna(subset=['lat', 'lng'])
 
         # Obtener las primeras 20 coordenadas únicas y los nombres de los hoteles
-        coordenadas_unicas = df_cleaned[['lat', 'lng']].values.tolist()
-        nombres_hoteles = df_cleaned['hotel_name'].values.tolist()
+        coordenadas_unicas = df[['lat', 'lng']].values.tolist()
+        nombres_hoteles = df['hotel_name'].values.tolist()
 
         # Crear un mapa centrado en el punto medio de las coordenadas
         latitudes = [coord[0] for coord in coordenadas_unicas]
@@ -81,7 +77,7 @@ with col2:
         # Agregar marcadores para cada coordenada única con el nombre del hotel y la información adicional en el cuadro emergente
         for coord, nombre_hotel in zip(coordenadas_unicas, nombres_hoteles):
             lat, lng = coord
-            hotel_info = df_cleaned.loc[df_cleaned['hotel_name'] == nombre_hotel]
+            hotel_info = df.loc[df['hotel_name'] == nombre_hotel]
             hotel_address = hotel_info['hotel_address'].values[0]
             reviewer_score = hotel_info['reviewer_score'].values[0]
             tooltip = folium.Tooltip(nombre_hotel)
