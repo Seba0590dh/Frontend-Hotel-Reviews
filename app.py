@@ -5,106 +5,152 @@ import streamlit as st
 import requests
 import json
 import pandas as pd
+from PIL import Image
 
 st.set_page_config(layout='wide')
 
-st.markdown("""
-        <style>
-               * {
-                    padding-left: 0rem;
-                    padding-right: 0rem;
-                    margin-left: 0rem;
-                    margin-right: 0rem;
-                }
-        </style>
-        """, unsafe_allow_html=True)
+col_img1, col_img2 = st.columns([2, 1])
+
+with col_img1:
+    image = Image.open('Img/Image20230621165219.jpg')
+
+    st.image(image, caption="Let's find your hotel", width=500)
+
+with col_img2:
+    image2 = Image.open('Img/hotel room with beachfront view.jpg')
+
+    st.image(image2, width=500,use_column_width=True)
+
+
+
+st.markdown(
+    """
+    <style>
+        * {
+            padding-left: 0rem;
+            padding-right: 0rem;
+            margin-left: 0rem;
+            margin-right: 0rem;
+        }
+        .bigger-text {
+            font-size: 24px;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 host = 'https://hotel-reviews-vp2e4dlnjq-uc.a.run.app'
 
-# Dividir la interfaz en dos columnas
-col1, col2 = st.columns(2)
+# Input txt
+txt = st.text_input('What would you like in your ideal hotel?', key='input_col1')  # Cambiamos la clave 'input' por 'input_col1'
 
-# Contenido de la primera columna
-with col1:
-    # Mover el st.text_input a la esquina inferior izquierda
-    txt = st.text_input('What hotel would you like?', key='input_col1')  # Cambiamos la clave 'input' por 'input_col1'
-    st.write('Length:', len(txt))
-    country = st.text_input('What country would you like?')
+st.write('Length:', len(txt))
 
-    try:
-        x = requests.get(host+'/search', params={'search_query': txt, 'country': country})
-        x.raise_for_status()  # Lanza una excepción si hay un error en la respuesta HTTP
-        data = json.loads(x.text)
-        df = pd.DataFrame.from_records(data=data)
+country_options = ['United Kingdom', 'Netherlands', 'Spain', 'France', 'Austria', 'Italy']
+country = st.selectbox('Select a country', country_options)
 
-        if df.shape[0]:
-            # Mostrar la tabla con la información del hotel
-            selected_hotel = df[df['hotel_name'] == txt].head(1)
-            if not selected_hotel.empty:
-                selected_hotel['reviewer_score'] = selected_hotel['reviewer_score'].apply(lambda x: '{:.1f}'.format(x))
-                st.write('Tabla de Hoteles')
-                st.table(selected_hotel[['hotel_name', 'reviewer_score', 'hotel_address']])
 
-            # Mostrar la tabla con los datos del dataframe
-            df['reviewer_score'] = df['reviewer_score'].apply(lambda x: '{:.1f}'.format(x))
-            st.write('Tabla de Hoteles')
-            st.table(df[['hotel_name', 'reviewer_score', 'hotel_address', 'summary']])
-    except requests.exceptions.RequestException as e:
-        st.error(f"Error al hacer la solicitud: {e}")
-    except (json.JSONDecodeError, KeyError) as e:
-        st.error("Error al procesar los datos de respuesta de la API")
+def request_function():
+    x = requests.get(host+'/search', params={'search_query': txt, 'country': country})
+    data = json.loads(x.text)
 
-# Contenido de la segunda columna
-with col2:
-    try:
-        x = requests.get(host+'/search', params={'search_query': txt, 'country': country})
-        x.raise_for_status()  # Lanza una excepción si hay un error en la respuesta HTTP
-        data = json.loads(x.text)
-        df = pd.DataFrame.from_records(data=data)
+    df = pd.DataFrame.from_records(data=data)
+    return df
 
-        if df.shape[0]:
-            # Obtener las primeras 20 coordenadas únicas y los nombres de los hoteles
-            coordenadas_unicas = df[['lat', 'lng']].values.tolist()
-            nombres_hoteles = df['hotel_name'].values.tolist()
 
-            # Crear un mapa centrado en el punto medio de las coordenadas
+df = pd.DataFrame()
+
+if st.button("Predecir"):
+    df = st.session_state["data"] = request_function()
+
+
+if 'data' in st.session_state:
+    df = st.session_state['data']
+
+if df.shape[0]:
+    # Eliminar filas con valores NaN
+    df_cleaned = df.dropna(subset=['lat', 'lng'])
+
+    if df_cleaned.shape[0]:
+        # Create a column layout
+        col_map, col_table = st.columns([2, 1])
+
+        # Display the map in the left column
+        with col_map:
+            # coordenadas
+            coordenadas_unicas = df_cleaned[['lat', 'lng']].values.tolist()
+            nombres_hoteles = df_cleaned['hotel_name'].values.tolist()
+
+            # Map centrado en el midpoint de las coordinates
             latitudes = [coord[0] for coord in coordenadas_unicas]
             longitudes = [coord[1] for coord in coordenadas_unicas]
             center_lat = sum(latitudes) / len(latitudes)
             center_lng = sum(longitudes) / len(longitudes)
-
-            # Crear un mapa con centro automático y ajuste de límites
             map = folium.Map(location=[center_lat, center_lng], width='90%', height='100%', fullscreen_control=True)
 
-            # Crear un grupo de marcadores
+            # Create a marker cluster for the hotels
             marker_cluster = MarkerCluster()
 
-            # Agregar marcadores para cada coordenada única con el nombre del hotel y la información adicional en el cuadro emergente
+            # Markers para cada hotel con popup information
             for coord, nombre_hotel in zip(coordenadas_unicas, nombres_hoteles):
                 lat, lng = coord
-                hotel_info = df.loc[df['hotel_name'] == nombre_hotel]
+                hotel_info = df_cleaned.loc[df_cleaned['hotel_name'] == nombre_hotel]
                 hotel_address = hotel_info['hotel_address'].values[0]
+                #summary = hotel_info['summary'].values[0]
                 reviewer_score = hotel_info['reviewer_score'].values[0]
                 tooltip = folium.Tooltip(nombre_hotel)
-                popup_content = f"<b>{nombre_hotel}</b><br><b>Address:</b> {hotel_address}<br><b>Reviewer Score:</b> {reviewer_score}"
+                popup_content = f"<b>{nombre_hotel}</b><br><b>Address:</b> {hotel_address}</b><br><b>Reviewer Score:</b> {reviewer_score}"
                 popup = folium.Popup(popup_content, max_width=300)
                 marker = folium.Marker([lat, lng], tooltip=tooltip, popup=popup)
+
+                # Add the marker to the marker cluster
                 marker_cluster.add_child(marker)
 
-            # Agregar el grupo de marcadores al mapa
+            # Add the marker cluster to the map
             map.add_child(marker_cluster)
 
-            # Ajustar los límites del mapa para que se muestren todos los marcadores con un margen adicional
+            # Fit the map bounds to display all markers with additional margin
             margin_factor = 0.1
             margin_lat = (max(latitudes) - min(latitudes)) * margin_factor
             margin_lng = (max(longitudes) - min(longitudes)) * margin_factor
-            map.fit_bounds([[min(latitudes) - margin_lat, min(longitudes) - margin_lng], [max(latitudes) + margin_lat, max(longitudes) + margin_lng]])
+            map.fit_bounds([[min(latitudes) - margin_lat, min(longitudes) - margin_lng],
+                            [max(latitudes) + margin_lat, max(longitudes) + margin_lng]])
 
-            # Mostrar el mapa en Streamlit
-            st.title('Mapa de Hoteles')
-            st.write('Primeros 20 hoteles')
+            # Show the map in Streamlit
+            st.title('Hotel recommendations')
+            st.markdown('<p class="bigger-text">Here are 20 recommendations for hotels that suit your needs. Check them out!</p>',unsafe_allow_html=True)
             folium_static(map)
-    except requests.exceptions.RequestException as e:
-        st.error(f"Error al hacer la solicitud: {e}")
-    except (json.JSONDecodeError, KeyError) as e:
-        st.error("Error al procesar los datos de respuesta de la API")
+
+            # Get the selected hotel from the dropdown menu
+            st.title('Select your hotel')
+            st.markdown('<p class="bigger-text">Select a hotel to see its exact location and check what people have written about it!</p>', unsafe_allow_html=True)
+            selected_hotel = st.selectbox("", nombres_hoteles, key='dropdown',)
+
+            if selected_hotel:
+                selected_row = df_cleaned[df_cleaned['hotel_name'] == selected_hotel].index[0]
+                selected_summary = df_cleaned.loc[selected_row, 'summary']
+
+                # Clear the map and add only the selected hotel's marker
+                map = folium.Map(location=[center_lat, center_lng], width='90%', height='100%', fullscreen_control=True)
+                marker = folium.Marker(
+                    [df_cleaned.loc[selected_row, 'lat'], df_cleaned.loc[selected_row, 'lng']],
+                    tooltip=selected_hotel,
+                    popup=folium.Popup(
+                        f"<b>{selected_hotel}</b><br><b>Address:</b> {df_cleaned.loc[selected_row, 'hotel_address']}<br><b>Reviewer Score:</b> {df_cleaned.loc[selected_row, 'reviewer_score']}",
+                        max_width=300,
+                    ),
+                )
+                map.add_child(marker)
+
+                folium_static(map)
+
+                # Show the selected hotel's summary
+                st.write("Selected Summary:")
+                st.write(selected_summary)
+
+        # Display the table in the right column
+        with col_table:
+            # Display the initial table with hotel_name and reviewer_score
+            st.write('Hotel Names and Review Scores')
+            table = st.table(df_cleaned[['hotel_name', 'reviewer_score']])
