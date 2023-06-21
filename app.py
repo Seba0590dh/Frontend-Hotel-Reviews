@@ -41,10 +41,12 @@ with col1:
             # Mostrar la tabla con la información del hotel
             selected_hotel = df[df['hotel_name'] == txt].head(1)
             if not selected_hotel.empty:
+                selected_hotel['reviewer_score'] = selected_hotel['reviewer_score'].apply(lambda x: round(x, 1))
                 st.write('Tabla de Hoteles')
                 st.table(selected_hotel[['hotel_name', 'reviewer_score', 'hotel_address']])
 
             # Mostrar la tabla con los datos del dataframe
+            df['reviewer_score'] = df['reviewer_score'].apply(lambda x: round(x, 1))
             st.write('Tabla de Hoteles')
             st.table(df[['hotel_name', 'reviewer_score', 'hotel_address', 'summary']])
     except requests.exceptions.RequestException as e:
