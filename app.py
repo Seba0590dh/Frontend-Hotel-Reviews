@@ -21,85 +21,99 @@ st.markdown("""
 
 host = 'https://hotel-reviews-vp2e4dlnjq-uc.a.run.app'
 
-# Dividir la interfaz en dos columnas
-col1, col2 = st.columns(2)
+# Input txt
+txt = st.text_input('What would you like in your ideal hotel?', key='input_col1')  # Cambiamos la clave 'input' por 'input_col1'
 
-# Contenido de la primera columna
-with col1:
-    # Mover el st.text_input a la esquina inferior izquierda
-    txt = st.text_input('What hotel would you like?', key='input_col1')  # Cambiamos la clave 'input' por 'input_col1'
-    st.write('Length:', len(txt))
-    country = st.text_input('What country would you like?')
+st.write('Length:', len(txt))
 
-    x = requests.get(host+'/search', params={'search_query': txt,'country': country})
+country_options = ['United Kingdom', 'Netherlands', 'Spain', 'France', 'Austria', 'Italy']
+country = st.selectbox('Select a country', country_options)
+
+
+def request_function():
+
+    x = requests.get(host+'/search', params={'search_query': txt, 'country': country})
     data = json.loads(x.text)
 
     df = pd.DataFrame.from_records(data=data)
+    return df
 
-    if df.shape[0]:
-        # Eliminar filas con valores NaN
-        df_cleaned = df.dropna(subset=['lat', 'lng'])
+df = pd.DataFrame()
 
-        # Mostrar la tabla con la información del hotel
-        selected_hotel = df_cleaned[df_cleaned['hotel_name'] == txt].head(1)
-        if not selected_hotel.empty:
-            st.write('Tabla de Hoteles')
-            st.table(selected_hotel[['hotel_name', 'reviewer_score', 'hotel_address']])
-
-        # Mostrar la tabla con los datos del dataframe
-        st.write('Tabla de Hoteles')
-        st.table(df[['hotel_name', 'reviewer_score', 'hotel_address','summary']])
+if st.button("Predecir"):
+    df = st.session_state["data"] = request_function()
 
 
-# Contenido de la segunda columna
-with col2:
-    x = requests.get(host+'/search', params={'search_query': txt,'country':country})
-    data = json.loads(x.text)
+if  'data' in st.session_state:
+    df = st.session_state['data']
 
-    df = pd.DataFrame.from_records(data=data)
+if df.shape[0]:
 
-    if df.shape[0]:
-        # Eliminar filas con valores NaN
-        df_cleaned = df.dropna(subset=['lat', 'lng'])
 
-        # Obtener las primeras 20 coordenadas únicas y los nombres de los hoteles
-        coordenadas_unicas = df_cleaned[['lat', 'lng']].values.tolist()
-        nombres_hoteles = df_cleaned['hotel_name'].values.tolist()
+    # Eliminar filas con valores NaN
+    df_cleaned = df.dropna(subset=['lat', 'lng'])
 
-        # Crear un mapa centrado en el punto medio de las coordenadas
-        latitudes = [coord[0] for coord in coordenadas_unicas]
-        longitudes = [coord[1] for coord in coordenadas_unicas]
-        center_lat = sum(latitudes) / len(latitudes)
-        center_lng = sum(longitudes) / len(longitudes)
+    if df_cleaned.shape[0]:
+        # Create a column layout
+        col_map, col_table = st.columns([2, 1])
 
-        # Crear un mapa con centro automático y ajuste de límites
-        map = folium.Map(location=[center_lat, center_lng], width='90%', height='100%', fullscreen_control=True)
+        # Display the map in the left column
+        with col_map:
+            # coordenadas
+            coordenadas_unicas = df_cleaned[['lat', 'lng']].values.tolist()
+            nombres_hoteles = df_cleaned['hotel_name'].values.tolist()
 
-        # Crear un grupo de marcadores
-        marker_cluster = MarkerCluster()
+            # Map centrado en el midpoint de las coordinates
+            latitudes = [coord[0] for coord in coordenadas_unicas]
+            longitudes = [coord[1] for coord in coordenadas_unicas]
+            center_lat = sum(latitudes) / len(latitudes)
+            center_lng = sum(longitudes) / len(longitudes)
+            map = folium.Map(location=[center_lat, center_lng], width='90%', height='100%', fullscreen_control=True)
 
-        # Agregar marcadores para cada coordenada única con el nombre del hotel y la información adicional en el cuadro emergente
-        for coord, nombre_hotel in zip(coordenadas_unicas, nombres_hoteles):
-            lat, lng = coord
-            hotel_info = df_cleaned.loc[df_cleaned['hotel_name'] == nombre_hotel]
-            hotel_address = hotel_info['hotel_address'].values[0]
-            reviewer_score = hotel_info['reviewer_score'].values[0]
-            tooltip = folium.Tooltip(nombre_hotel)
-            popup_content = f"<b>{nombre_hotel}</b><br><b>Address:</b> {hotel_address}<br><b>Reviewer Score:</b> {reviewer_score}"
-            popup = folium.Popup(popup_content, max_width=300)
-            marker = folium.Marker([lat, lng], tooltip=tooltip, popup=popup)
-            marker_cluster.add_child(marker)
+            # Create a marker cluster for the hotels
+            marker_cluster = MarkerCluster()
 
-        # Agregar el grupo de marcadores al mapa
-        map.add_child(marker_cluster)
+            # Markers para cada hotel con popup information
+            for coord, nombre_hotel in zip(coordenadas_unicas, nombres_hoteles):
+                lat, lng = coord
+                hotel_info = df_cleaned.loc[df_cleaned['hotel_name'] == nombre_hotel]
+                hotel_address = hotel_info['hotel_address'].values[0]
+                summary = hotel_info['summary'].values[0]
+                reviewer_score = hotel_info['reviewer_score'].values[0]
+                tooltip = folium.Tooltip(nombre_hotel)
+                popup_content = f"<b>{nombre_hotel}</b><br><b>Address:</b> {hotel_address}<br><b>Summary:</b> {summary}<br><b>Reviewer Score:</b> {reviewer_score}"
+                popup = folium.Popup(popup_content, max_width=300)
+                marker = folium.Marker([lat, lng], tooltip=tooltip, popup=popup)
 
-        # Ajustar los límites del mapa para que se muestren todos los marcadores con un margen adicional
-        margin_factor = 0.1
-        margin_lat = (max(latitudes) - min(latitudes)) * margin_factor
-        margin_lng = (max(longitudes) - min(longitudes)) * margin_factor
-        map.fit_bounds([[min(latitudes) - margin_lat, min(longitudes) - margin_lng], [max(latitudes) + margin_lat, max(longitudes) + margin_lng]])
+                # Add the marker to the marker cluster
+                marker_cluster.add_child(marker)
 
-    # Mostrar el mapa en Streamlit
-    st.title('Mapa de Hoteles')
-    st.write('Primeros 20 hoteles')
-    folium_static(map)
+            # Add the marker cluster to the map
+            map.add_child(marker_cluster)
+
+            # Fit the map bounds to display all markers with additional margin
+            margin_factor = 0.1
+            margin_lat = (max(latitudes) - min(latitudes)) * margin_factor
+            margin_lng = (max(longitudes) - min(longitudes)) * margin_factor
+            map.fit_bounds([[min(latitudes) - margin_lat, min(longitudes) - margin_lng], [max(latitudes) + margin_lat, max(longitudes) + margin_lng]])
+
+            # Show the map in Streamlit
+            st.title('Hotel Map')
+            st.write('First 20 hotels')
+            folium_static(map)
+
+            # Get the selected row when clicked
+            selected_row = st.table(df_cleaned[['hotel_name', 'reviewer_score']]).selectbox("", df_cleaned.index, key='table')
+
+            if selected_row is not None:
+                selected_summary = df_cleaned.loc[selected_row, 'summary']
+                st.write("Selected Summary:")
+                st.write(selected_summary)
+
+        # Display the table in the right column
+        with col_table:
+            # Display the initial table with hotel_name and reviewer_score
+            st.write('Hotel Names and Review Scores')
+            table = st.table(df_cleaned[['hotel_name', 'reviewer_score']])
+else:
+    st.write("Please enter one of the following countries: United Kingdom, Italy, Spain, France, Austria, or Netherlands")
