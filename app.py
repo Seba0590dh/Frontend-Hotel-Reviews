@@ -5,19 +5,40 @@ import streamlit as st
 import requests
 import json
 import pandas as pd
+from PIL import Image
 
 st.set_page_config(layout='wide')
 
-st.markdown("""
-        <style>
-               * {
-                    padding-left: 0rem;
-                    padding-right: 0rem;
-                    margin-left: 0rem;
-                    margin-right: 0rem;
-                }
-        </style>
-        """, unsafe_allow_html=True)
+col_img1, col_img2 = st.columns([2, 1])
+
+with col_img1:
+    image = Image.open('Img/Image20230621165219.jpg')
+
+    st.image(image, caption="Let's find your hotel", width=500)
+
+with col_img2:
+    image2 = Image.open('Img/hotel room with beachfront view.jpg')
+
+    st.image(image2, width=500,use_column_width=True)
+
+
+
+st.markdown(
+    """
+    <style>
+        * {
+            padding-left: 0rem;
+            padding-right: 0rem;
+            margin-left: 0rem;
+            margin-right: 0rem;
+        }
+        .bigger-text {
+            font-size: 24px;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 host = 'https://hotel-reviews-vp2e4dlnjq-uc.a.run.app'
 
@@ -31,12 +52,12 @@ country = st.selectbox('Select a country', country_options)
 
 
 def request_function():
-
     x = requests.get(host+'/search', params={'search_query': txt, 'country': country})
     data = json.loads(x.text)
 
     df = pd.DataFrame.from_records(data=data)
     return df
+
 
 df = pd.DataFrame()
 
@@ -44,12 +65,10 @@ if st.button("Predecir"):
     df = st.session_state["data"] = request_function()
 
 
-if  'data' in st.session_state:
+if 'data' in st.session_state:
     df = st.session_state['data']
 
 if df.shape[0]:
-
-
     # Eliminar filas con valores NaN
     df_cleaned = df.dropna(subset=['lat', 'lng'])
 
@@ -78,10 +97,10 @@ if df.shape[0]:
                 lat, lng = coord
                 hotel_info = df_cleaned.loc[df_cleaned['hotel_name'] == nombre_hotel]
                 hotel_address = hotel_info['hotel_address'].values[0]
-                summary = hotel_info['summary'].values[0]
+                #summary = hotel_info['summary'].values[0]
                 reviewer_score = hotel_info['reviewer_score'].values[0]
                 tooltip = folium.Tooltip(nombre_hotel)
-                popup_content = f"<b>{nombre_hotel}</b><br><b>Address:</b> {hotel_address}<br><b>Summary:</b> {summary}<br><b>Reviewer Score:</b> {reviewer_score}"
+                popup_content = f"<b>{nombre_hotel}</b><br><b>Address:</b> {hotel_address}</b><br><b>Reviewer Score:</b> {reviewer_score}"
                 popup = folium.Popup(popup_content, max_width=300)
                 marker = folium.Marker([lat, lng], tooltip=tooltip, popup=popup)
 
@@ -95,18 +114,38 @@ if df.shape[0]:
             margin_factor = 0.1
             margin_lat = (max(latitudes) - min(latitudes)) * margin_factor
             margin_lng = (max(longitudes) - min(longitudes)) * margin_factor
-            map.fit_bounds([[min(latitudes) - margin_lat, min(longitudes) - margin_lng], [max(latitudes) + margin_lat, max(longitudes) + margin_lng]])
+            map.fit_bounds([[min(latitudes) - margin_lat, min(longitudes) - margin_lng],
+                            [max(latitudes) + margin_lat, max(longitudes) + margin_lng]])
 
             # Show the map in Streamlit
-            st.title('Hotel Map')
-            st.write('First 20 hotels')
+            st.title('Hotel recommendations')
+            st.markdown('<p class="bigger-text">Here are 20 recommendations for hotels that suit your needs. Check them out!</p>',unsafe_allow_html=True)
             folium_static(map)
 
-            # Get the selected row when clicked
-            selected_row = st.table(df_cleaned[['hotel_name', 'reviewer_score']]).selectbox("", df_cleaned.index, key='table')
+            # Get the selected hotel from the dropdown menu
+            st.title('Select your hotel')
+            st.markdown('<p class="bigger-text">Select a hotel to see its exact location and check what people have written about it!</p>', unsafe_allow_html=True)
+            selected_hotel = st.selectbox("", nombres_hoteles, key='dropdown',)
 
-            if selected_row is not None:
+            if selected_hotel:
+                selected_row = df_cleaned[df_cleaned['hotel_name'] == selected_hotel].index[0]
                 selected_summary = df_cleaned.loc[selected_row, 'summary']
+
+                # Clear the map and add only the selected hotel's marker
+                map = folium.Map(location=[center_lat, center_lng], width='90%', height='100%', fullscreen_control=True)
+                marker = folium.Marker(
+                    [df_cleaned.loc[selected_row, 'lat'], df_cleaned.loc[selected_row, 'lng']],
+                    tooltip=selected_hotel,
+                    popup=folium.Popup(
+                        f"<b>{selected_hotel}</b><br><b>Address:</b> {df_cleaned.loc[selected_row, 'hotel_address']}<br><b>Reviewer Score:</b> {df_cleaned.loc[selected_row, 'reviewer_score']}",
+                        max_width=300,
+                    ),
+                )
+                map.add_child(marker)
+
+                folium_static(map)
+
+                # Show the selected hotel's summary
                 st.write("Selected Summary:")
                 st.write(selected_summary)
 
@@ -115,5 +154,3 @@ if df.shape[0]:
             # Display the initial table with hotel_name and reviewer_score
             st.write('Hotel Names and Review Scores')
             table = st.table(df_cleaned[['hotel_name', 'reviewer_score']])
-else:
-    st.write("Please enter one of the following countries: United Kingdom, Italy, Spain, France, Austria, or Netherlands")
