@@ -7,21 +7,29 @@ import json
 import pandas as pd
 from PIL import Image
 
+
 st.set_page_config(layout='wide')
 
-col_img1, col_img2 = st.columns([2, 1])
-
-with col_img1:
-    image = Image.open('Img/Image20230621165219.jpg')
-
-    st.image(image, caption="Let's find your hotel", width=500)
-
-with col_img2:
-    image2 = Image.open('Img/hotel room with beachfront view.jpg')
-
-    st.image(image2, width=500,use_column_width=True)
+#col_img1, col_img2 = st.columns([2, 1])
 
 
+image = Image.open('Img/Image20230622095242.jpg')
+
+st.image(image, use_column_width= True)
+
+#with col_img2:
+    #image2 = Image.open('Img/hotel room with beachfront view.jpg')
+
+    #st.image(image2, width=500,use_column_width=True)
+
+# Add a text block with a welcome message and a brief summary
+st.markdown('<h1 style="text-align: center;">Welcome to HotelQuest!</h1>', unsafe_allow_html=True)
+st.markdown('<p class="bigger-text">Can\'t decide where to stay? No worries! We will help you find that ideal place. Just type for preferences and we\'ll do the rest.</p>', unsafe_allow_html=True)
+
+
+# Load and display the additional image
+#image2 = Image.open('Img/hotel_image.jpg')
+#st.image(image2, use_column_width=True)
 
 st.markdown(
     """
@@ -45,7 +53,6 @@ host = 'https://hotel-reviews-vp2e4dlnjq-uc.a.run.app'
 # Input txt
 txt = st.text_input('What would you like in your ideal hotel?', key='input_col1')  # Cambiamos la clave 'input' por 'input_col1'
 
-st.write('Length:', len(txt))
 
 country_options = ['United Kingdom', 'Netherlands', 'Spain', 'France', 'Austria', 'Italy']
 country = st.selectbox('Select a country', country_options)
@@ -61,7 +68,7 @@ def request_function():
 
 df = pd.DataFrame()
 
-if st.button("Predecir"):
+if st.button("Search"):
     df = st.session_state["data"] = request_function()
 
 
@@ -151,6 +158,7 @@ if df.shape[0]:
 
         # Display the table in the right column
         with col_table:
-            # Display the initial table with hotel_name and reviewer_score
+           # Display the initial table with hotel_name and reviewer_score
+            df_cleaned['reviewer_score'] = df_cleaned['reviewer_score'].apply(lambda x: '{:.1f} ⭐'.format(x))
             st.write('Hotel Names and Review Scores')
             table = st.table(df_cleaned[['hotel_name', 'reviewer_score']])
