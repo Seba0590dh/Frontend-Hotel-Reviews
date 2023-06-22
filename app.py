@@ -6,7 +6,7 @@ import requests
 import json
 import pandas as pd
 from PIL import Image
-
+import urllib.parse
 
 st.set_page_config(layout='wide')
 
@@ -67,6 +67,12 @@ def request_function():
 
 
 df = pd.DataFrame()
+
+def generate_booking_link(hotel_name):
+    base_url = "https://www.booking.com/"
+    encoded_hotel_name = urllib.parse.quote(hotel_name)
+    booking_link = f"{base_url}searchresults.html?ss={encoded_hotel_name}"
+    return booking_link
 
 if st.button("Search"):
     df = st.session_state["data"] = request_function()
@@ -155,6 +161,10 @@ if df.shape[0]:
                 # Show the selected hotel's summary
                 st.write("Selected Summary:")
                 st.write(selected_summary)
+                # Generate and display the Booking.com link for the selected hotel
+                booking_link = generate_booking_link(selected_hotel)
+                st.write("Booking.com Link:")
+                st.write(booking_link)
 
         # Display the table in the right column
         with col_table:
